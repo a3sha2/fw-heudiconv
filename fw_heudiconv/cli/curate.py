@@ -10,10 +10,12 @@ from ..convert import apply_heuristic, confirm_intentions, confirm_bids_namespac
 from ..query import get_seq_info
 from heudiconv import utils
 import logging
+import ipdb
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('fw-heudiconv-curator')
 
+DEBUG = False # Global variable; ONLY to be set at the command line; drops the user into an interactive python debugger
 
 def pretty_string_seqinfo(seqinfo):
     tr = seqinfo.TR if seqinfo.TR is not None else -1.0
@@ -49,6 +51,7 @@ def convert_to_bids(client, project_label, heuristic_path, subject_labels=None,
         dry_run (bool): Print the changes, don't apply them on flywheel
     """
 
+    # Get the Flywheel sessions
     if dry_run:
         logger.setLevel(logging.DEBUG)
     logger.info("Querying Flywheel server...")
@@ -67,12 +70,21 @@ def convert_to_bids(client, project_label, heuristic_path, subject_labels=None,
     logger.debug('Found sessions:\n\t%s',
                  "\n\t".join(['%s (%s)' % (ses['label'], ses.id) for ses in sessions]))
 
+    if DEBUG:
+        print("***check your sessions are correct***")
+        ipdb.set_trace()
+
     # Find SeqInfos to apply the heuristic to
     seq_infos = get_seq_info(client, project_label, sessions)
     logger.debug(
         "Found SeqInfos:\n%s",
         "\n\t".join([pretty_string_seqinfo(seq) for seq in seq_infos]))
 
+    if DEBUG:
+        print("***check seqinfos are correct***")
+        ipdb.set_trace()
+
+    # Get the heuristic and apply
     logger.info("Loading heuristic file...")
     try:
         if os.path.isfile(heuristic_path):
@@ -115,12 +127,22 @@ def convert_to_bids(client, project_label, heuristic_path, subject_labels=None,
     else:
         session_rename = None
 
+    if DEBUG:
+        print("***check heuristic application***")
+        ipdb.set_trace()
+
     for key, val in to_rename.items():
 
         # assert val is list
         if not isinstance(val, set):
-                val = set(val)
+            val = set(val)
+
         for seqitem, value in enumerate(val):
+
+            if DEBUG:
+                print(" ***drop in to each change*** ")
+                ipdb.set_trace()
+
             apply_heuristic(client, key, value, dry_run, intention_map[key],
                             metadata_extras[key], subject_rename, session_rename, seqitem+1)
 
@@ -172,6 +194,12 @@ def get_parser():
         action='store',
         default=None
     )
+    parser.add_argument(
+        "--debug",
+        help=argparse.SUPPRESS,
+        action='store_true',
+        default=False
+    )
 
     return parser
 
@@ -182,6 +210,9 @@ def main():
 
     parser = get_parser()
     args = parser.parse_args()
+
+    global DEBUG
+    DEBUG = args.debug
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -194,6 +225,9 @@ def main():
     # Print a lot if requested
     if args.verbose:
         logger.setLevel(logging.DEBUG)
+
+    if DEBUG:
+         ipdb.set_trace()  # check the state of the arguments
 
     convert_to_bids(client=fw,
                     project_label=args.project,
